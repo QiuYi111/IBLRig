@@ -15,3 +15,5 @@ cascade:
 - [ROS 2 节点](ros2-nodes/)
 - [ROS 2 话题、服务与动作](ros2-interfaces/)
 - [数据文件](data/)
+- [Daemon / systemd](daemons/)
+- [Chaos / HIL](chaos/)
