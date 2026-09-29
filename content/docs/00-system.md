@@ -1,227 +1,180 @@
 ---
 title: "00 · 认识系统"
 weight: 10
-baseline: "IBL main @ 6c2ea40"
-summary: "从一场实验看清 MCU、ROS 2、Web、相机、显示和数据链。"
+summary: "从网页控制台、实验主机和实验装置三个部分认识 IBL Rig。"
 ---
 
 # 认识系统
 
-IBL Rig 把一场行为训练拆成三个执行层：
+IBL Rig 用一台 Raspberry Pi 5 管理整套训练装置。操作者通过浏览器完成训练，硬件控制器执行毫秒级动作，相机和数据系统同步记录整个过程。
+
+## 系统组成
 
 ```text
-Browser / Feishu
+浏览器 / 飞书
       │
-      │ HTTP / WebSocket
       ▼
-Rig Web ──────────────── Session configuration / control
+网页控制台
       │
-      │ ROS 2
       ▼
-Rig Supervisor ──────── Session authority + Runtime Graph
+Raspberry Pi 5
+ROS 2 实验服务
       │
-      ├── Task Compiler
-      ├── Recorder
-      ├── Diagnostics
-      ├── Stimulus Server ─── HDMI display
-      ├── DepthAI Manager ─── OAK-FFC-4P
-      └── Controller Gateway
-                │
-                │ SWD / fixed SRAM ABI
-                ▼
-        STM32F407 / FreeRTOS
-                │
-                ├── wheel input
-                ├── M2006 + C610
-                ├── peristaltic pump
-                ├── TTL / PPS
-                └── Trial FSM
+      ├── 刺激显示器
+      ├── OAK 四路相机
+      ├── 数据记录
+      ├── 行为声音
+      └── RoboMaster C Board
+                 │
+                 ├── 转轮
+                 ├── M2006 + C610
+                 ├── 蠕动泵
+                 └── 同步输入输出
 ```
 
-## 一场实验的主链路
+## 网页控制台
 
-### 1. 配置
+网页控制台是日常使用入口。
 
-Rig Web 从模板库读取 YAML。操作者选择模板、填写 subject、应用允许的参数修改，然后执行 resolve。
+主界面包含：
 
-Resolve 会生成一组固定 artifact：
+- 实验控制
+- 实验设置
+- 配置库
+- 小鼠编号
+- 预检
+- 视频预览
+- 表现统计
+- 控制权
+- 实验结果
 
-```text
-resolved.yaml
-task.json
-<sha>.trial-table.json
-session.json
-resolution.json
-```
+一场训练通常从“实验设置”开始，在“表现统计”和“视频预览”中监看，最后进入数据处理和归档。
 
-每个文件都有 SHA-256。Session 启动时，Supervisor 使用这些 artifact 作为输入。
+## 实验主机
 
-### 2. Runtime Graph
+主机使用 Raspberry Pi 5，运行 Ubuntu 24.04 和 ROS 2 Jazzy。
 
-Supervisor 根据 Session artifact 计算需要的 capability。
+它负责：
 
-常见 capability 包括：
+- 读取训练配置
+- 准备实验所需设备
+- 将每个 Trial 发给硬件控制器
+- 在 HDMI 屏幕上显示视觉刺激
+- 播放行为声音
+- 控制四路 OAK 相机
+- 记录行为事件和录像
+- 生成实验质量报告
+- 上传 NAS
+- 汇总到 W&B
+- 写入飞书实验索引
 
-- `mcu`
-- `stimulus`
-- `camera`
-- `recorder`
-- `diagnostics`
-- `time`
-- `task`
-- `calibration`
+主机使用 NVMe 保存实验数据，录像和行为日志直接写入本地高速存储。
 
-Runtime Manager 订阅 `/rig/runtime/graph`，按当前 graph 启停对应 launch。每个 capability 以独立进程组运行，并发布 `CapabilityManifest` 和 `DeviceHealth`。
+## 硬件控制器
 
-### 3. Trial 编译
+RoboMaster C Board 使用 STM32F407。
 
-训练任务分成两种执行方式：
+每个 Trial 的实时部分在控制器上运行，包括：
 
-**Precompiled**
+- 读取转轮位置
+- 判断响应方向和阈值
+- 控制 M2006 电机
+- 控制奖励泵
+- 产生同步信号
+- 记录硬件事件
+- 执行安全停止
 
-整场 Trial 在 Session 开始前编译成有限状态表。
+控制器与 Raspberry Pi 通过 ST-Link/SWD 保持运行时通信。
 
-**Online policy**
+## 转轮与力反馈
 
-Host 保存训练策略状态。每完成一个 Trial，Gateway 根据 MCU 返回的 outcome 请求下一个 Trial，再把新的 Trial 编译成固定表并发送给 MCU。
+转轮连接 M2006 减速电机和 C610 电调。
 
-两种方式最终都得到同一种 MCU 执行对象：有界 Trial table。
+控制器以 500 Hz 运行电机控制环。训练配置可以选择不同的力反馈模式，例如透明、阻尼、弹簧、棘轮和自适应透明模式。
 
-### 4. MCU 执行
-
-STM32F407 负责 Trial 的实时执行。
-
-典型 ChoiceWorld Trial 包含：
-
-```text
-trial_start
-    ↓
-quiescent_period
-    ↓
-show stimulus
-    ↓
-interactive delay
-    ↓
-go tone
-    ↓
-closed loop
-    ↓
-response window
-    ├── correct
-    ├── incorrect
-    └── no response
-    ↓
-feedback / reward
-    ↓
-ITI
-```
-
-轮子阈值、奖励动作、电机 profile、TTL 和状态转换都在 MCU 本地执行。
+正式训练配置使用 force profile 27。
 
 ## 视觉刺激
 
-Stimulus Server 运行在 Pi 上，使用 direct-KMS 输出到 HDMI。
+刺激显示器连接 Raspberry Pi 的 HDMI。
 
-公开命令包括：
+当前显示参数：
 
-- `PRELOAD`
-- `SHOW`
-- `CLOSED_LOOP`
-- `FREEZE`
-- `FREEZE_CENTER`
-- `HIDE`
+- 1920 × 1080
+- 60 Hz
+- 20 px/°
+- 中性灰背景亮度 0.5
+- 80 px 光电二极管标记区
 
-渲染器目标模式为 1920 × 1080 @ 60 Hz。每次显示命令完成后发布 `StimulusPresentation`，包含 command id、page-flip 时间、frame index 和显示状态。
+训练过程中，Gabor 刺激的位置跟随转轮运动。转轮达到正确响应位置时，刺激到达屏幕中央。
 
-闭环视觉使用 MCU 同一 Trial 的 wheel reference。屏幕位置由 Trial 初始位置、wheel reference 和 Trial gain 共同确定。
+## 行为声音
 
-## 声音
+系统通过主机音频输出生成两种声音：
 
-Audio Server 使用 PortAudio 生成行为声音。
+- Go tone：5 kHz，100 ms
+- Error noise：500 ms 白噪声
 
-当前提供：
+音频采样率为 48 kHz。
 
-- 5 kHz、100 ms go tone
-- 500 ms error white noise
-- 48 kHz stereo output
+## 四路相机
 
-第一次 PortAudio output callback 作为软件 onset acknowledgement，经 `SoundPresentation` 返回。
+相机系统使用 Luxonis OAK-FFC-4P。
 
-## 相机
+四路传感器：
 
-当前相机为 OAK-FFC-4P，连接四个 1280 × 800 global-shutter sensor：
+- CAM_A：OV9782 彩色全局快门
+- CAM_B：OV9282 黑白全局快门
+- CAM_C：OV9282 黑白全局快门
+- CAM_D：OV9282 黑白全局快门
 
-- CAM_A：OV9782，彩色
-- CAM_B/C/D：OV9282，黑白
+当前录像规格：
 
-当前生产配置：
-
+- 1280 × 800
 - 30 fps
 - H.265
-- 12 Mbps / camera
+- 12 Mbps / 路
 - USB 3
-- 4 路同步分组
-- CAM_A 主预览
-- MJPEG 浏览器预览
+- 四路同时录制
 
-DepthAI Manager 在设备端完成编码。录制线程把 H.265 access unit 直接写入 Session 目录，同时发布精确的 frame metadata。
+浏览器同时显示主画面和三路缩略图。
 
-## Recorder
-
-Recorder Manager 创建 Session 目录并打开 append-only JSONL event log。
-
-它记录：
-
-- MCU semantic event
-- stimulus command
-- stimulus presentation
-- sound presentation
-- session command
-- camera frame metadata
-- device health
-- time status
-
-Finalize 时执行 fsync、计算 SHA-256，并写 manifest。
-
-## 实验后处理
-
-Session finalize 后创建持久化 jobs：
+## 一场训练怎样运行
 
 ```text
-analysis
-   ├── nas
-   └── wandb
-         └── feishu
-nas ─────────┘
-   └── cleanup
+选择训练配置
+      ↓
+输入小鼠编号
+      ↓
+锁定配置
+      ↓
+预检
+      ↓
+开始实验
+      ↓
+视觉刺激 + 转轮 + 声音 + 奖励
+      ↓
+四路录像 + 行为记录
+      ↓
+结束实验
+      ↓
+行为分析
+      ↓
+NAS + W&B + 飞书
 ```
 
-具体内容：
+## 实验结束后
 
-- **analysis**：重放 event log，生成 behavior/QC
-- **NAS**：复制并逐文件校验
-- **W&B**：上传配置、行为指标和 QC
-- **Feishu**：写入 Session 索引
-- **cleanup**：清理已经完成 NAS 校验的本地文件
+系统会整理：
 
-## 系统状态入口
+- Trial 结果
+- 正确率
+- 奖励统计
+- 四路视频
+- 每帧时间信息
+- 实验质量报告
+- NAS 路径
+- W&B 链接
+- 飞书实验记录
 
-调系统时最有用的四个状态源：
-
-| 状态 | Topic |
-|---|---|
-| Session | `/rig/session/status` |
-| Runtime | `/rig/runtime/status` |
-| Device | `/rig/device_health` |
-| Capability | `/rig/capabilities` |
-
-详细接口见 [ROS 2 Reference](/IBLRig/reference/ros2-interfaces/)。
-
-## 代码入口
-
-- [Rig OS](https://github.com/QiuYi111/IBL/tree/main/software/host/rig-os)
-- [Supervisor](https://github.com/QiuYi111/IBL/tree/main/software/host/rig-os/ros2_ws/src/rig_supervisor)
-- [Controller Gateway](https://github.com/QiuYi111/IBL/tree/main/software/host/rig-os/ros2_ws/src/rig_controller_gateway)
-- [DepthAI](https://github.com/QiuYi111/IBL/tree/main/software/host/rig-os/ros2_ws/src/rig_depthai)
-- [Stimulus](https://github.com/QiuYi111/IBL/tree/main/software/host/rig-os/ros2_ws/src/rig_stimulus)
-- [Recorder](https://github.com/QiuYi111/IBL/tree/main/software/host/rig-os/ros2_ws/src/rig_recorder)
+下一章从网页控制台完成一次实验。
