@@ -22,6 +22,8 @@ IBL Rig 是一套小鼠行为训练系统，覆盖视觉刺激、转轮交互、
 - [实验数据](docs/04-data/)
 - [硬件介绍](docs/05-hardware/)
 - [ROS 2](docs/06-ros2/)
+- [Daemon 与自恢复](docs/07-daemon-recovery/)
+- [Chaos / HIL](docs/08-chaos-hil/)
 
 ## Reference
 
@@ -30,3 +32,5 @@ IBL Rig 是一套小鼠行为训练系统，覆盖视觉刺激、转轮交互、
 - [ROS 2 节点](reference/ros2-nodes/)
 - [ROS 2 话题、服务与动作](reference/ros2-interfaces/)
 - [数据文件](reference/data/)
+- [Daemon / systemd](reference/daemons/)
+- [Chaos / HIL](reference/chaos/)
