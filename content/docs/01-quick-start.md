@@ -1,290 +1,203 @@
 ---
 title: "01 · Quick Start"
 weight: 20
-baseline: "IBL main @ 6c2ea40"
-summary: "从登录到 Session finalize 的完整操作路径。"
+summary: "从登录到结束实验，按网页控制台完成一次完整训练。"
 ---
 
 # Quick Start
 
-## 1. 打开 Rig Web
+## 1. 打开网页控制台
 
-当前 ratRot Web 监听：
+在同一网络中打开当前 rig 的网页地址。
 
-```text
-0.0.0.0:18080
-```
+页面顶部显示：
 
-可通过局域网地址或配置好的 Tailnet 地址访问。
+- 当前用户
+- 当前控制者
+- 实验状态
+- 设备状态
 
-页面加载后，Web 会建立 ROS bridge，并持续读取：
+首次进入时完成飞书登录。
 
-- Session 状态
-- Runtime Graph
-- Device Health
-- Camera status
-- Post-session jobs
-- 当前控制权
+## 2. 获取控制权
 
-## 2. 飞书登录
+“控制权”区域显示当前控制者。
 
-点击登录后，浏览器进入中央 Auth Broker，再进入飞书 OAuth。
+空闲状态下可以直接获取控制权。另一位操作者正在使用设备时，可以发送接管申请。当前控制者会收到飞书通知并进行处理。
 
-成功后浏览器获得本地 `ibl_rig_session` cookie。页面右上角显示：
+获得控制权后，实验设置和控制按钮进入可操作状态。
 
-- display name
-- role
-- control holder
-- online state
+## 3. 打开实验设置
 
-如果 rig 当前空闲，登录会尝试获取控制权。
+进入“实验设置”。
 
-## 3. 选择模板
+填写：
 
-打开 Configuration。
+1. **小鼠编号**
+2. **训练配置**
 
-内置模板包括：
+配置库中提供正式预训练、正式训练和实验验证配置。
 
-- 正式预训练
-- 正式训练
-- office silent
-- automatic-reward pretraining
-- online training
-- phase-0 HIL
-- fast-three verification
-- no-OAK verification
-- v2 training template
+选中配置后，页面展示当前训练参数。
 
-输入 subject id，然后选择模板。
+## 4. 调整参数
 
-## 4. 修改参数
+“临时修改”用于本次实验的参数调整。
 
-Web 根据 override policy 开放可修改字段。
+常用参数包括：
 
-修改后页面显示 diff：
+- 刺激位置
+- 对比度
+- 响应时间
+- Trial 间隔
+- 奖励时长
+- 声音
+- 力反馈模式
+- Trial 数量
 
-```text
-before → after
-```
+修改后页面显示“临时修改差异”。
 
-常见参数包括：
+详细参数见 [实验与设备参数 Reference](/IBLRig/reference/configuration/)。
 
-- response window
-- ITI
-- contrast
-- stimulus position
-- reward
-- sound
-- force profile
-- trial cap
+## 5. 锁定配置
 
-完整参数见 [实验参数 Reference](/IBLRig/reference/configuration/)。
+确认小鼠编号和训练参数后，点击 **锁定配置**。
 
-## 5. Resolve
+页面显示：
 
-点击锁定配置后，Web 调用：
+- 小鼠
+- 模板
+- 会话
+- 校验值
+- 临时修改差异
+- 最终配置
 
-```text
-POST /api/v1/config/resolve
-```
+锁定后的配置用于本次实验全过程。
 
-Resolve 会：
+## 6. 预检
 
-1. 校验模板
-2. 应用 overrides
-3. 解析训练历史
-4. 编译 Trial
-5. 生成 Session config
-6. 计算 required devices
-7. 写入 resolved artifact
-8. 返回 `resolved_sha256`
+点击 **预检**。
 
-页面随后持有一个固定的 Session resolution。
+页面逐项检查：
 
-## 6. Prepare
+- 配置文件与校验值
+- 主机通信
+- 控制链路
+- 刺激屏
+- 相机
+- 录制与存储
+- 时间同步
 
-Prepare 把 Session intent 提交给 Supervisor。
+全部项目进入正常状态后，开始实验按钮可用。
 
-Supervisor 读取：
+## 7. 检查视频预览
 
-- compiled table URI + SHA
-- session config URI + SHA
-- rig id
-- operating mode
-- session id
+打开“视频预览”。
 
-随后发布 Runtime Graph。
+确认四路画面：
 
-Runtime Manager 按 graph 启动需要的 capability。
+- CAM_A
+- CAM_B
+- CAM_C
+- CAM_D
 
-例如一场带视觉、相机和 MCU 的训练会启动：
+主画面可在四路相机之间切换。
 
-```text
-mcu
-stimulus
-camera
-recorder
-diagnostics
-time
-task
-```
+训练前重点确认：
 
-## 7. Preflight
+- 小鼠位置
+- 头架位置
+- 转轮位置
+- 四路视野覆盖
+- 红外照明
+- 图像曝光
 
-Preflight 汇总当前 capability、health、time、storage 和 recording 状态。
+## 8. 开始实验
 
-页面直接显示检查结果。
+点击 **开始实验**。
 
-常见检查项：
+确认弹窗会再次显示：
 
-- required device 是否 live
-- DeviceHealth
-- time quality
-- session directory
-- NVMe free space
-- recorder state
-- camera state
-- stimulus state
-- MCU status
+- 小鼠编号
+- 训练配置
 
-通过后即可 Start。
+开始后进入运行状态。
 
-## 8. Start
+## 9. 监看实验
 
-Start 调用 SessionCoordinator，最终进入 ROS action：
+“表现统计”持续更新：
 
-```text
-/rig/run_session
-```
+- 试次
+- 正确率
+- 正确 / 错误 / 无响应
+- 请求奖励
+- 已用时间
+- 预计剩余时间
+- 上个结果
 
-执行顺序：
+“视频预览”持续显示四路相机。
 
-```text
-prepare recorder
-    ↓
-arm camera recording
-    ↓
-stage trial table
-    ↓
-send START to controller
-    ↓
-receive progress events
-    ↓
-run trials
-```
+顶部状态区持续显示实验和设备状态。
 
-页面开始显示：
+## 10. 暂停与继续
 
-- current trial
-- completed trials
-- correct / incorrect / no-response
-- requested reward
-- elapsed time
-- device status
-- camera preview
+点击 **本试次后暂停**，系统完成当前 Trial 后进入暂停。
 
-## 9. Session 控制
+点击 **继续实验**，训练从下一 Trial 继续。
 
-Web 当前操作集合：
+## 11. 正常结束
 
-| 操作 | 含义 |
-|---|---|
-| `pause-after-trial` | 当前 Trial 结束后暂停 |
-| `resume` | 继续运行 |
-| `stop-after-trial` | 当前 Trial 结束后正常结束 |
-| `abort` | 立即进入中止流程 |
-| `cancel_prepare` | 取消已 Prepare 的 Session |
-| `reset_fault` | 清理 Supervisor fault，管理员操作 |
+点击 **本试次后停止**。
 
-这些动作统一走：
+系统完成当前 Trial，然后结束训练并保存本次数据。
 
-```text
-POST /api/v1/session/control/{operation}
-```
+## 12. 中止实验
 
-## 10. Camera Preview
+点击 **中止实验**，填写原因并确认。
 
-Web Camera 区域显示四路画面。
+系统进入结束流程，网页保留本次实验记录和原因。
 
-当前 preview 结构：
+## 13. 实验结束
 
-- CAM_A：主预览，stride 1
-- CAM_B/C/D：缩略图，stride 3
-- 浏览器最多同时接受 8 个 camera client
+结束后查看：
 
-切换主画面时，Web 更新 `/rig/camera/preview_primary`，OAK pipeline 保持运行。
+- 完成 Trial 数
+- 正确率
+- 奖励统计
+- 数据处理状态
+- NAS 状态
+- W&B 链接
+- 飞书记录
 
-## 11. Session 结束
+实验数据保存在主机 NVMe，并同步到 NAS。
 
-RunSession action 结束后，Supervisor 执行：
+## 14. 蠕动泵排气
 
-1. controller final state
-2. recorder finalize
-3. diagnostics quality report
-4. Session result 写入
-5. post-session jobs 创建
+实验设置提供：
 
-页面随后展示：
+**蠕动泵排气 · 反转 1 分钟**
 
-```text
-analysis
-NAS
-W&B
-Feishu
-cleanup
-```
+用于装液和排气。
 
-每个 job 都有独立状态和重试。
+操作步骤：
 
-## 12. 找数据
+1. 将出液端放到收集容器
+2. 点击排气
+3. 观察液体连续通过管路
+4. 达到需要状态后点击停止排气
+5. 擦干舔水口周围液体
+6. 回到实验设置执行预检
 
-Session 数据根目录：
+## 15. 配置库
 
-```text
-/home/jingyi/rig-os/data/sessions/<session_id>/
-```
+“配置库”支持：
 
-配置 resolution：
+- 查看现有配置
+- 另存为新模板
+- 编辑新版本
+- 查看修改差异
+- 归档
+- 恢复
+- 从历史版本创建新版本
 
-```text
-/home/jingyi/rig-os/data/compiled/web/<session_id>/
-```
-
-训练状态：
-
-```text
-/home/jingyi/rig-os/data/training-policy/
-```
-
-具体文件见 [数据 Reference](/IBLRig/reference/data/)。
-
-## 13. 常用系统检查
-
-SSH 进入 ratRot：
-
-```bash
-ssh ratRot
-```
-
-查看控制面：
-
-```bash
-systemctl status ibl-rig-supervisor.service
-systemctl status ibl-rig-web.socket
-systemctl status ibl-rig-web.service
-```
-
-查看 ROS 状态：
-
-```bash
-ros2 topic echo --once /rig/session/status
-ros2 topic echo --once /rig/runtime/graph
-ros2 topic echo --once /rig/runtime/status
-ros2 topic echo --once /rig/device_health
-```
-
-查看相机：
-
-```bash
-ros2 service call /rig/camera/get_inventory rig_msgs/srv/GetCameraInventory
-```
+日常实验优先从已有训练配置开始，再使用“临时修改”完成本次调整。
