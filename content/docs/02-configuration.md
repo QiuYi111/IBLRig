@@ -1,300 +1,177 @@
 ---
 title: "02 · 配置文件"
 weight: 30
-baseline: "IBL main @ 6c2ea40"
-summary: "模板库、revision、override、resolve、Trial 编译和训练状态。"
+summary: "训练配置决定刺激、转轮、奖励、声音和训练阶段。"
 ---
 
 # 配置文件
 
-Rig Web 使用 YAML 模板描述实验。模板经过 resolve 后变成固定 Session artifact。
+每次实验都从一份训练配置开始。
 
-## 模板库
+配置文件使用 YAML 格式，网页控制台把常用参数直接显示为可编辑项。操作者可以选择已有配置、为本次实验做临时修改，也可以在配置库中保存新版本。
 
-模板分成两类目录：
+## 配置库
 
-```text
-builtin templates
-software/host/rig-os/ros2_ws/src/rig_web/templates/
+当前配置库包含：
 
-user templates
-/home/jingyi/rig-os/data/config/templates/
-```
+- 正式预训练
+- 正式训练
+- 自动奖励预训练
+- 在线训练
+- 训练验证配置
+- 静音验证配置
 
-内置模板随代码发布。用户模板由 Web 管理。
+系统内置配置直接出现在“训练配置”下拉框中。
 
-当前内置模板：
+个人配置可以保存多个版本，并支持归档和恢复。
 
-```text
-choice-world-formal-pretraining
-choice-world-formal-training
-choice-world-office-silent
-choice-world-pretraining-auto-reward
-choice-world-training-online
-choice-world-training-phase0-hil
-ratrot-training-choice-world-v2
-verification-choice-world-fast-three
-verification-choice-world-office-silent-no-oak
-```
+## 配置版本
 
-## TemplateStore
+每个配置都有：
 
-`TemplateStore` 提供完整版本管理：
+- 配置 ID
+- 显示名称
+- 版本号
+- 训练类型
+- 参数
+- 备注
 
-- create
-- version
-- history
-- rollback
-- archive
-- restore
+编辑配置后保存，会形成新的版本。
 
-用户模板首次创建为 revision 1。
+“查看修改差异”会显示本次修改前后的 YAML 内容。
 
-保存新版本时：
+## 临时修改
 
-```text
-revision N
-    ↓
-保存到 .history/<template_id>/N.yaml
-    ↓
-新内容写成 revision N+1
-    ↓
-原子替换 active YAML
-```
+“临时修改”适合只影响本次实验的调整。
 
-Template id 在整个 builtin + user catalog 中保持唯一。
+例如：
 
-## Schema v1
+- 奖励时长从 2 s 调到 1 s
+- Trial 上限从 2000 调到 500
+- 响应窗口从 60 s 调到 30 s
+- 调整刺激对比度
+- 调整力反馈 profile
 
-核心字段：
+点击“清除临时修改”即可恢复当前模板值。
 
-```yaml
-schema_version: 1
-template_id: example
-revision: 1
-display_name: Example
-rig_id: ratrot
-operating_mode: active_shaping
-mode: online_policy
+## 锁定配置
 
-task:
-  schema_version: 1
-  task_type: training_choice_world
-  plan: {}
+点击“锁定配置”后，页面生成本次实验的最终配置。
 
-online_policy: {}
+锁定页显示：
 
-session:
-  protocol: ...
-  notes: ...
-  required_devices: []
-```
+- 小鼠编号
+- 模板
+- 会话编号
+- 校验值
+- 临时修改差异
+- 最终配置
 
-### operating_mode
-
-当前三种模式：
-
-| 值 | ROS enum |
-|---|---:|
-| `maintenance` | 0 |
-| `standard_compatibility` | 1 |
-| `active_shaping` | 2 |
-
-### mode
-
-| 值 | 执行方式 |
-|---|---|
-| `precompiled` | 整场 Trial 预编译 |
-| `online_policy` | 每个 outcome 后生成下一 Trial |
-
-## Schema v2
-
-v2 模板把 protocol 和 rig profile 分开。
-
-当前 protocol id：
-
-```text
-ibl.training_choice_world
-```
-
-当前 rig profile：
-
-```text
-ratrot
-```
-
-加载时，configuration layer 把 v2 展开成 v1 execution template，再进入相同 resolve 流程。
-
-## Override
-
-Web policy 定义允许修改的路径。
-
-Override 使用 dotted path，例如：
-
-```text
-task.plan.response_window_us
-task.plan.feedback_error_us
-online_policy.trial_cap
-```
-
-Resolve 会记录每项改动：
-
-```yaml
-override_diff:
-  task.plan.response_window_us:
-    before: 60000000
-    after: 30000000
-```
-
-## Resolve 输出
-
-一次 resolve 生成：
-
-### `task.json`
-
-最终 task 定义。
-
-### `<sha>.trial-table.json`
-
-MCU 可执行的编译 artifact。
-
-Online policy 模式下，该 artifact 同时携带：
-
-- session identity
-- subject identity
-- policy build
-- plan template
-- seed
-- epoch
-- trial cap
-- training info
-- state file name
-
-### `session.json`
-
-Session metadata：
-
-- rig id
-- operating mode
-- protocol
-- operator
-- subject id
-- template id
-- template revision
-- notes
-- required devices
-
-### `resolved.yaml`
-
-完整锁定结果：
-
-- template
-- source SHA
-- overrides
-- override diff
-- artifact SHA
-- required devices
-
-### `resolution.json`
-
-Web / coordinator 使用的紧凑索引。
-
-## Required devices
-
-Required device 集合由编译结果计算。
-
-`required_session_devices()` 读取 Trial 和 Session config，得到实际 capability 需求。
-
-因此 Session 的设备需求与执行内容保持一致。
+预检和实验都使用这份最终配置。
 
 ## 正式预训练
 
-当前正式预训练：
+正式预训练用于小鼠熟悉装置、视觉刺激和奖励位置。
 
-```yaml
-task_type: habituation_choice_world
-positions_deg: [-35, 35]
-contrast_set: [1.0]
-trial_count: 400
-lateral_mean_s: 10
-lateral_sd_s: 2
-center_pre_reward_us: 500000
-reward:
-  direction: reverse
-  mode: duration
-  duration_ms: 2000
-reward_hold_us: 40000
-center_post_reward_us: 460000
-stimulus_ack_timeout_us: 3000000
-required_time_quality: freerun
-```
+当前参数：
 
-`seed_source: session` 让每个 Session 从 Session id 派生独立随机序列。
+| 项目 | 当前值 |
+|---|---:|
+| 刺激位置 | ±35° |
+| 对比度 | 100% |
+| Gabor 方向 | 0° |
+| 空间频率 | 0.1 cycles/° |
+| Gabor 尺寸 σ | 7° |
+| 侧边停留时间 | 10 ± 2 s |
+| 到中心后的奖励等待 | 0.5 s |
+| 奖励泵动作 | 反转 2 s |
+| 奖励后的显示时间 | 0.5 s |
+| Trial 上限 | 400 |
+
+每次实验使用独立的随机序列。
 
 ## 正式训练
 
-当前正式训练：
+正式训练使用 ChoiceWorld 六阶段训练流程。
 
-```yaml
-task_type: training_choice_world
-protocol: ibl_pdf_v4_6
-positions_deg: [-35, 35]
-stimulus_reverse: true
-wheel_radius_mm: 31
-quiescence_threshold_deg: 2
-quiescent_base_us: 200000
-response_window_us: 60000000
-feedback_correct_us: 2200000
-feedback_error_us: 2000000
-feedback_nogo_us: 2000000
-iti_us: 500000
-stimulus_ack_timeout_us: 3000000
-sound_enabled: true
-force_profile_id: 27
-required_time_quality: freerun
-```
+当前基础参数：
 
-Online policy：
+| 项目 | 当前值 |
+|---|---:|
+| 刺激位置 | ±35° |
+| Gabor 方向 | 0° |
+| 空间频率 | 0.1 cycles/° |
+| Gabor 尺寸 σ | 7° |
+| 转轮半径 | 31 mm |
+| 静止阈值 | 2° |
+| 基础静止时间 | 200 ms |
+| 响应窗口 | 60 s |
+| 正确反馈 | 2.2 s |
+| 错误反馈 | 2.0 s |
+| 无响应反馈 | 2.0 s |
+| Trial 间隔 | 0.5 s |
+| Go cue | 开启 |
+| 力反馈 | profile 27 |
+| Trial 上限 | 2000 |
 
-```yaml
-auto_history: true
-trial_cap: 2000
-```
+奖励泵使用反转 2 s。
 
-## Training history
+## 训练阶段
 
-训练状态存放在：
+正式训练会根据同一只小鼠之前的训练表现延续当前阶段。
 
-```text
-/home/jingyi/rig-os/data/training-policy/
-```
+系统会保留：
 
-Web 按 subject id 找最近完成的 policy snapshot，并恢复：
+- 当前训练阶段
+- 已完成 Trial 数
+- 各刺激条件表现
+- 最近表现窗口
+- 当前奖励设置
+- 当前转轮增益
 
-- training phase
-- adaptive reward
-- adaptive gain
-- performance history
-- phase trial counts
+下一次选择同一小鼠时，训练从保存状态继续。
 
-每个 snapshot 带 state digest 和 decision digest。
+## 小鼠编号
 
-## Trial 随机性
+小鼠编号用于关联连续训练历史。
 
-Online Trial 的随机 seed 由：
+同一只小鼠持续使用同一个编号，可以在“表现统计”中查看连续训练结果。
 
-```text
-epoch
-trial_id
-policy_state_sha256
-```
+## 配置中的物理量
 
-共同派生。
+最常接触的几类参数：
 
-相同 policy state 与相同 Trial id 会得到相同编译结果。
+### 视觉
 
-## 参数 Reference
+- 刺激位置：视觉刺激起始角度
+- 对比度：Gabor 明暗对比
+- 方向：Gabor 条纹方向
+- 空间频率：每视觉角度内的明暗周期
+- σ：Gabor 包络大小
 
-完整参数、默认值、单位和所在配置见：
+### 转轮
 
-[实验参数 Reference](/IBLRig/reference/configuration/)。
+- 转轮半径：把转轮角运动换算成线位移
+- 静止阈值：Trial 开始前允许的转轮运动范围
+- 力反馈 profile：转轮阻尼、惯性和拟物反馈设置
+
+### 时间
+
+- 静止时间
+- 响应窗口
+- 正确反馈
+- 错误反馈
+- Trial 间隔
+
+### 奖励
+
+- 奖励方向
+- 奖励时长
+- 排气方向
+
+### 声音
+
+- Go cue
+- Error noise
+
+完整字段、单位和默认值见 [实验与设备参数 Reference](/IBLRig/reference/configuration/)。
