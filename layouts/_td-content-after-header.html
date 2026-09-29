@@ -1,0 +1,4 @@
+{{ if eq .Section "docs" }}
+  {{ with .Params.baseline }}<p class="docs-baseline">工程基线：{{ . }}</p>{{ end }}
+  {{ with .Params.summary }}<p class="docs-summary">{{ . }}</p>{{ end }}
+{{ end }}
