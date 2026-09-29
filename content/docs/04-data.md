@@ -1,190 +1,184 @@
 ---
 title: "04 · 实验数据"
 weight: 50
-baseline: "IBL main @ 6c2ea40 · 2026-09-28"
-summary: "原始数据先在 rig 上形成不可变记录，再经过 analysis、NAS、W&B、飞书和验证后清理。"
+summary: "行为记录、四路 H.265 视频、质量报告、NAS、W&B 和飞书记录。"
 ---
 
-IBL Rig 不把 ROS 2 topic 当成全部数据真值。
+# 实验数据
 
-当前原则是：
+每次实验结束后，系统会保存行为记录、四路视频、配置、质量报告和分析结果。
 
-> **高带宽原始数据写原生文件；行为语义写追加式事件日志；DDS 负责语义消息、健康状态、索引和低频元数据。**
+## 本地存储
 
-## 一次 Session 产生什么
+实验数据保存在 Raspberry Pi 5 的 NVMe 数据盘。
 
-最核心的几类文件：
+主目录：
 
-- semantic event log；
-- recorder manifest；
-- camera native streams；
-- per-frame camera index；
-- camera manifest；
-- diagnostics / quality report；
-- resolved configuration；
-- 后续生成的 analysis 结果。
+```text
+/home/jingyi/rig-os/data/sessions/<会话编号>/
+```
 
-每个关键 artifact 都使用 SHA-256 绑定身份。
+网页中的“会话”就是这个目录对应的实验编号。
+
+## 一次实验包含什么
+
+典型内容包括：
+
+- 行为事件记录
+- 四路 H.265 视频
+- 四路视频帧索引
+- 实验配置
+- 设备状态记录
+- 时间同步记录
+- 实验质量报告
+- 行为分析结果
 
 ## 行为事件
 
-Recorder 写追加式事件日志。Session 成功并不以“MCU 说跑完了”为终点：
+行为记录按时间顺序保存整场实验的重要事件，例如：
 
-1. Controller 完成；
-2. Recorder finalize；
-3. fsync；
-4. 生成 manifest；
-5. 才能形成成功结果。
+- Trial 开始
+- 刺激出现
+- 转轮响应
+- 正确
+- 错误
+- 无响应
+- 奖励请求
+- 声音播放
+- Trial 结束
+- 实验结束
 
-物理事件保留自己的：
+每条硬件事件携带设备时间信息。
 
-- clock id；
-- device tick；
-- 可选 global time；
-- mapping version；
-- uncertainty；
-- time quality。
+## 四路视频
 
-Host 收到 DDS 消息的时间不能替换真实物理时间。
+每个相机独立保存一条 H.265 视频流。
 
-## 相机录制
+当前录像规格：
 
-当前 `main` 的 OAK runtime 默认：
+| 项目 | 当前值 |
+|---|---:|
+| 相机数量 | 4 |
+| 分辨率 | 1280 × 800 |
+| 帧率 | 30 fps |
+| 编码 | H.265 |
+| 码率 | 12 Mbps / 路 |
+| 数据接口 | USB 3 |
 
-- OAK-FFC-4P；
-- 4 路；
-- 1280 × 800；
-- 30 fps；
-- H.265；
-- 12 Mbps / camera；
-- USB3 required。
+CAM_A 为彩色，CAM_B/C/D 为黑白。
 
-浏览器预览并不从 H.265 在 Pi 上转码。设备端并行生成 MJPEG 预览流，Host 侧再做主画面/缩略图抽样。
+## 视频帧索引
 
-每一帧的 index 保存：
+每路视频同时保存帧索引。
 
-- camera id；
-- frame sequence；
-- device timestamp；
-- exposure；
-- gain；
-- native file offset；
-- encoded size；
-- encoded SHA-256。
+帧索引记录：
 
-H.264/H.265 writer 会在文件开头预留空间，并在拿到 VPS/SPS/PPS 后复制到前缀，使 elementary stream 可以从文件头开始解码，同时保留原始帧 offset。
+- 相机
+- 帧序号
+- 相机时间戳
+- 曝光时间
+- 增益
+- 视频文件位置
 
-## 当前相机证据边界
+因此可以从行为时间定位到对应的视频帧。
 
-这里必须区分“当前配置”和“已有长测”。
+## 实验质量报告
 
-### 已通过的 60 分钟组合测试
+实验结束时自动生成质量报告。
 
-2026-09-21 的 Pi 5 长测在 **15 fps production profile** 下通过：
+主要指标：
 
-- 四路相机；
-- Web preview；
-- 真实 1920×1080 stimulus；
-- NVMe recording；
-- 60 分钟；
-- 0 sequence gaps。
+- 行为事件连续性
+- 相机帧连续性
+- 设备状态
+- 时间同步状态
+- 记录完整性
 
-45 fps 的 full-load gate 没通过，因此没有被采用。
+网页会显示实验的数据质量状态。
 
-### 当前 H.265 默认
+## 行为分析
 
-PR #134 把 production OAK 录制切到 H.265，并完成一次真实三 trial Web session：
+系统自动分析行为记录并生成：
 
-- 四路 1280×800；
-- 每路 627 个 indexed frames；
-- NAS verified；
-- 本地 cleanup 完成；
-- ffprobe 能从文件开头识别 HEVC。
+- Trial 数
+- 正确数
+- 错误数
+- 无响应数
+- 正确率
+- 奖励次数
+- 奖励总量
+- 每个 Trial 的结果
+- Trial 时间统计
 
-但该样本仍有少量非致命 POC decoder warnings。
-
-因此：
-
-> 当前 30 fps H.265 是代码默认；此前 15 fps 的 60 分钟 soak 不能直接当成当前 H.265 配置的长时间验收。
-
-## 自动分析
-
-Session finalize 后会创建独立 job。
-
-Analysis worker：
-
-- 验证输入 hash；
-- 读取 finalized artifact；
-- replay semantic event log；
-- 生成确定性的行为/QC JSON；
-- 统计 outcome、reward request 和数据质量。
-
-如果 global time 不完整，trial timing 就保持 unavailable，不用 Host receipt time 填一个假时间。
+“表现统计”页面使用这些结果展示训练表现。
 
 ## NAS
 
-NAS worker 只发布 finalized session artifact。
+实验数据会自动复制到 NAS。
 
-关键保护：
+NAS 中按会话编号保存：
 
-- mount 根目录必须有专用 marker；
-- 复制先进入 `.incoming/<session_id>`；
-- 按路径、字节数和 SHA-256 验证；
-- 验证后原子发布到 `sessions/<session_id>`；
-- 已经存在的发布目录只做验证，不覆盖。
+```text
+sessions/<会话编号>/
+```
 
-这避免 NAS 掉线时，Pi 上一个普通空目录被误认为 NAS。
+复制完成后，系统逐文件检查大小和 SHA-256。
+
+飞书实验记录会保存对应的 SMB 路径。
 
 ## W&B
 
-W&B 在 analysis 与 NAS 都成功后运行。
+W&B 用于汇总实验表现。
 
-上传的是：
+每次实验对应一个独立 run，包含：
 
-- 解析后的配置；
-- summary metrics；
-- trial rows；
-- behavior/QC；
-- diagnostics；
-- NAS destination reference。
+- 小鼠编号
+- 操作者
+- 训练配置
+- Trial 数
+- 正确率
+- 各类结果数量
+- 奖励统计
+- 数据质量
+- Trial 表格
+- NAS 地址
 
-原始视频、完整 event log 和 camera stream 不直接交给 W&B SDK。
+网页和飞书都可以进入对应 W&B run。
 
-## 飞书存档
+## 飞书实验记录
 
-最终 Feishu worker 等待：
+实验完成后，飞书中会保存一条实验索引。
 
-1. analysis；
-2. verified NAS；
-3. W&B。
+字段包括：
 
-然后把固定 session index schema 发给中央 Broker。
+- 会话编号
+- rig
+- 操作者
+- 小鼠编号
+- 训练配置
+- 训练任务
+- 实验状态
+- 数据质量
+- W&B 链接
+- NAS 地址
 
-按 session ID 先查再更新，因此远端已经成功、Pi 端重试时不会轻易重复创建多行。
+同一会话始终对应同一条飞书记录。
 
-## 本地清理
+## 本地空间管理
 
-本地 cleanup 的必要条件是 **NAS 副本已验证**。
+NAS 校验完成后，本地数据进入自动清理流程。
 
-Analysis 失败本身不再阻止清理已经安全复制的原始数据。
+当数据盘占用达到 90% 时，系统优先清理已经完成 NAS 校验的会话。
 
-当 session filesystem 使用率达到 90% 时，cleanup worker 会提前释放已经 verified 的可清理数据；它不会为了磁盘压力跳过 NAS 校验。
+行为分析报告保留在本地，原始录像和记录由 NAS 提供长期存储。
 
-## 数据真值
+## 如何找到一次实验
 
-如果 Web、W&B、飞书和本地 summary 之间出现冲突，排查顺序应该回到：
+最方便的索引顺序：
 
-1. resolved session artifact；
-2. event log；
-3. recorder/camera manifest；
-4. 原生 camera files；
-5. 对应 hash。
+1. 在飞书中找到小鼠或会话编号
+2. 打开 W&B 查看训练表现
+3. 使用 NAS 地址进入原始数据
+4. 根据会话编号定位四路视频和行为记录
 
-飞书不是原始数据源。
-
-### 相关源码与文档
-
-- [ROS 2 protocol contract](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/docs/protocols.md)
-- [Camera integration](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/docs/camera-integration.md)
-- [Pi 5 camera soak](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/docs/pi5-camera-soak-2026-09-21.md)
-- [Native camera writer](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/ros2_ws/src/rig_depthai/rig_depthai/recording.py)
+详细文件说明见 [数据文件 Reference](/IBLRig/reference/data/)。
