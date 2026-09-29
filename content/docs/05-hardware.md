@@ -286,20 +286,20 @@ Pi 5 接收编码后的视频流并直接写入 NVMe，同时保存：
 
 转轮和屏幕使用同一 Trial 的响应基准，使视觉移动和行为判定保持一致。
 
-## 行为声音
+## 行为蜂鸣器
 
-行为声音从 Pi 5 音频设备输出。
+行为声音由 C Board 的板载蜂鸣器产生。
 
 当前参数：
 
 | 项目 | 当前值 |
 |---|---:|
-| 采样率 | 48 kHz |
-| Go tone | 5 kHz / 100 ms |
-| Go tone amplitude | 0.1 |
-| Error noise | 500 ms |
-| Error noise amplitude | 0.2 |
-| Fade | 10 ms |
+| 输出引脚 | PD14 / TIM4_CH3 |
+| Go tone | 4 kHz / 100 ms |
+| Error sound | 2 kHz / 4 kHz 交替 |
+| 单段时长 | 50 ms |
+| Error 总时长 | 500 ms |
+| 支持频率 | 100–10,000 Hz |
 
 ## 时间同步
 
