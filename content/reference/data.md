@@ -109,6 +109,26 @@ camera-recording-manifest.json
 | `encoded_size` | access unit 大小 |
 | `encoded_sha256` | access unit SHA-256 |
 
+## 闭环视觉记录
+
+每次刺激显示记录中包含当前画面的闭环参数：
+
+| 字段 | 含义 |
+|---|---|
+| `trial_id` | Trial 编号 |
+| `start_position_px` | 刺激起始像素位置 |
+| `position_px` | 当前刺激像素位置 |
+| `start_position_deg` | 起始视觉角度 |
+| `visual_position_deg` | 当前视觉角度 |
+| `gain_px_per_deg` | 当前转轮-屏幕增益，px/轮角° |
+| `response_threshold_rad` | 当前响应阈值 |
+| `center_residual_px` | 到达响应阈值时距离中心的像素残差 |
+| `wheel_position_rad` | 当前转轮角度 |
+| `wheel_reference_rad` | 当前 Trial 的转轮参考位置 |
+| `closed_loop` | 闭环显示状态 |
+
+这些字段可以把转轮运动、行为判定和屏幕位置放到同一条 Trial 记录中。
+
 ## Camera manifest
 
 文件：
