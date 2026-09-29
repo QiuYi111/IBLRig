@@ -5,15 +5,15 @@ type: docs
 
 # IBL Rig Documentation
 
-IBL Rig 是一套小鼠行为训练系统。系统由三层组成：
+IBL Rig 是一套小鼠行为训练系统，覆盖视觉刺激、转轮交互、奖励给水、四路视频记录、实验控制和数据归档。
 
-- **RoboMaster C Board / STM32F407**：执行 Trial 状态机，读取转轮，控制 M2006、电泵、TTL 和本地安全逻辑。
-- **Raspberry Pi 5 / ROS 2 Jazzy**：编译任务，管理 Session，控制相机和视觉刺激，记录数据，运行诊断与实验后处理。
-- **Rig Web / 飞书**：完成登录、配置、控制权、预检、实验控制、实时监看和结果索引。
+系统由三部分组成：
 
-当前文档对应 [QiuYi111/IBL main @ `6c2ea40`](https://github.com/QiuYi111/IBL/commit/6c2ea40067cbfe20a0c748c7da68f80270a20016)。
+- **实验装置**：转轮、M2006 电机、蠕动泵、四路相机、刺激显示器、红外照明和同步信号。
+- **实验主机**：Raspberry Pi 5 运行 ROS 2，负责实验控制、设备管理、刺激呈现、录像和数据处理。
+- **网页控制台**：完成飞书登录、训练配置、小鼠编号、预检、开始/暂停/停止、视频预览和表现统计。
 
-## 文档
+## 使用文档
 
 - [认识系统](docs/00-system/)
 - [Quick Start](docs/01-quick-start/)
@@ -25,8 +25,8 @@ IBL Rig 是一套小鼠行为训练系统。系统由三层组成：
 
 ## Reference
 
-- [实验参数](reference/configuration/)
+- [实验与设备参数](reference/configuration/)
+- [硬件参数](reference/hardware/)
 - [ROS 2 节点](reference/ros2-nodes/)
-- [ROS 2 Topic / Service / Action](reference/ros2-interfaces/)
-- [Web API](reference/web-api/)
-- [数据与文件](reference/data/)
+- [ROS 2 话题、服务与动作](reference/ros2-interfaces/)
+- [数据文件](reference/data/)
