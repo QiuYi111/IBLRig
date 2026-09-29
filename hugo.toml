@@ -1,0 +1,70 @@
+baseURL = "https://qiuyi111.github.io/IBLRig/"
+locale = "zh-CN"
+title = "IBL Rig Documentation"
+enableRobotsTXT = true
+enableGitInfo = true
+pluralizeListTitles = false
+
+[params]
+  title = "IBL Rig Documentation"
+  description = "IBL 行为训练装置与软件系统文档"
+  github_repo = "https://github.com/QiuYi111/IBLRig"
+  github_branch = "master"
+  offlineSearch = true
+  copyright = "IBL Rig Documentation"
+
+[params.ui]
+  sidebar_menu_compact = false
+  sidebar_menu_foldable = true
+  sidebar_search_disable = false
+  navbar_logo = false
+  footer_about_disable = true
+  showLightDarkModeMenu = true
+  breadcrumb_disable = false
+
+[markup.goldmark.renderer]
+  unsafe = true
+
+[markup.tableOfContents]
+  startLevel = 2
+  endLevel = 4
+  ordered = false
+
+[module]
+  proxy = "https://proxy.golang.org"
+
+[module.hugoVersion]
+  extended = true
+  min = "0.166.0"
+
+[[module.imports]]
+  path = "gitlab.com/gitlab-com/content-sites/docsy-gitlab"
+  ignoreConfig = true
+
+  [[module.imports.mounts]]
+    source = "layouts"
+    target = "layouts"
+  [[module.imports.mounts]]
+    source = "assets"
+    target = "assets"
+  [[module.imports.mounts]]
+    source = "static"
+    target = "static"
+
+[[module.imports]]
+  path = "github.com/google/docsy/theme"
+
+[[menus.main]]
+  name = "文档"
+  pageRef = "/docs"
+  weight = 10
+
+[[menus.main]]
+  name = "IBL 源码"
+  url = "https://github.com/QiuYi111/IBL"
+  weight = 20
+
+[[menus.main]]
+  name = "文档仓库"
+  url = "https://github.com/QiuYi111/IBLRig"
+  weight = 30
