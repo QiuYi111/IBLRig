@@ -1,176 +1,290 @@
 ---
 title: "01 · Quick Start"
 weight: 20
-baseline: "IBL main @ 6c2ea40 · 2026-09-28"
-summary: "从打开网页到结束一次 session：登录、选择配置、预检、运行、监看、收尾。"
+baseline: "IBL main @ 6c2ea40"
+summary: "从登录到 Session finalize 的完整操作路径。"
 ---
 
-本章只讲最短路径。配置参数、权限和数据格式在后续章节展开。
-
-<div class="status-note">
-当前仓库的正式协议文档仍写明：尚未完成正式动物训练整体验收。第一次接触 rig 时，应先按无动物工程集成流程熟悉系统。
-</div>
+# Quick Start
 
 ## 1. 打开 Rig Web
 
-使用桌面浏览器打开当前 rig 的局域网或 Tailnet 地址。Web 页面只是控制面，不是实时安全链；页面刷新、浏览器休眠或网络短暂断开不会让 MCU 继续输出失去约束的动作。
+当前 ratRot Web 监听：
 
-如果页面要求登录，进入飞书 OAuth 流程并返回 rig。
+```text
+0.0.0.0:18080
+```
 
-登录完成后先看两件事：
+可通过局域网地址或配置好的 Tailnet 地址访问。
 
-1. 页面右上角显示的身份是不是自己；
-2. 当前是否持有控制权。
+页面加载后，Web 会建立 ROS bridge，并持续读取：
 
-没有控制权时可以查看状态，但写操作会受限。
+- Session 状态
+- Runtime Graph
+- Device Health
+- Camera status
+- Post-session jobs
+- 当前控制权
 
-## 2. 认识主界面
+## 2. 飞书登录
 
-开始实验前主要关注这些区域：
+点击登录后，浏览器进入中央 Auth Broker，再进入飞书 OAuth。
 
-| 区域 | 看什么 |
+成功后浏览器获得本地 `ibl_rig_session` cookie。页面右上角显示：
+
+- display name
+- role
+- control holder
+- online state
+
+如果 rig 当前空闲，登录会尝试获取控制权。
+
+## 3. 选择模板
+
+打开 Configuration。
+
+内置模板包括：
+
+- 正式预训练
+- 正式训练
+- office silent
+- automatic-reward pretraining
+- online training
+- phase-0 HIL
+- fast-three verification
+- no-OAK verification
+- v2 training template
+
+输入 subject id，然后选择模板。
+
+## 4. 修改参数
+
+Web 根据 override policy 开放可修改字段。
+
+修改后页面显示 diff：
+
+```text
+before → after
+```
+
+常见参数包括：
+
+- response window
+- ITI
+- contrast
+- stimulus position
+- reward
+- sound
+- force profile
+- trial cap
+
+完整参数见 [实验参数 Reference](/IBLRig/reference/configuration/)。
+
+## 5. Resolve
+
+点击锁定配置后，Web 调用：
+
+```text
+POST /api/v1/config/resolve
+```
+
+Resolve 会：
+
+1. 校验模板
+2. 应用 overrides
+3. 解析训练历史
+4. 编译 Trial
+5. 生成 Session config
+6. 计算 required devices
+7. 写入 resolved artifact
+8. 返回 `resolved_sha256`
+
+页面随后持有一个固定的 Session resolution。
+
+## 6. Prepare
+
+Prepare 把 Session intent 提交给 Supervisor。
+
+Supervisor 读取：
+
+- compiled table URI + SHA
+- session config URI + SHA
+- rig id
+- operating mode
+- session id
+
+随后发布 Runtime Graph。
+
+Runtime Manager 按 graph 启动需要的 capability。
+
+例如一场带视觉、相机和 MCU 的训练会启动：
+
+```text
+mcu
+stimulus
+camera
+recorder
+diagnostics
+time
+task
+```
+
+## 7. Preflight
+
+Preflight 汇总当前 capability、health、time、storage 和 recording 状态。
+
+页面直接显示检查结果。
+
+常见检查项：
+
+- required device 是否 live
+- DeviceHealth
+- time quality
+- session directory
+- NVMe free space
+- recorder state
+- camera state
+- stimulus state
+- MCU status
+
+通过后即可 Start。
+
+## 8. Start
+
+Start 调用 SessionCoordinator，最终进入 ROS action：
+
+```text
+/rig/run_session
+```
+
+执行顺序：
+
+```text
+prepare recorder
+    ↓
+arm camera recording
+    ↓
+stage trial table
+    ↓
+send START to controller
+    ↓
+receive progress events
+    ↓
+run trials
+```
+
+页面开始显示：
+
+- current trial
+- completed trials
+- correct / incorrect / no-response
+- requested reward
+- elapsed time
+- device status
+- camera preview
+
+## 9. Session 控制
+
+Web 当前操作集合：
+
+| 操作 | 含义 |
 |---|---|
-| Session / Configuration | subject、模板、配置 revision、是否已锁定 |
-| Device / Health | MCU、刺激、相机、recorder、时间、磁盘 |
-| Camera Preview | 四路 OAK 画面与主预览 |
-| Control | Prepare / Preflight / Start / Pause / Stop / Abort |
-| Performance | trial 数、正确/错误、奖励、耗时和训练评估 |
-| Post-session | analysis、NAS、W&B、飞书、cleanup |
+| `pause-after-trial` | 当前 Trial 结束后暂停 |
+| `resume` | 继续运行 |
+| `stop-after-trial` | 当前 Trial 结束后正常结束 |
+| `abort` | 立即进入中止流程 |
+| `cancel_prepare` | 取消已 Prepare 的 Session |
+| `reset_fault` | 清理 Supervisor fault，管理员操作 |
 
-名称会随前端迭代略有变化，但状态机含义不变。
+这些动作统一走：
 
-## 3. 选择配置
+```text
+POST /api/v1/session/control/{operation}
+```
 
-1. 输入 **subject id**。
-2. 从配置库选择需要的模板。
-3. 如需改参数，先复制/编辑允许修改的字段，不要直接绕过配置系统改生成文件。
-4. 检查页面展示的差异。
+## 10. Camera Preview
 
-正式路径目前包括“正式预训练”和“正式训练”模板；仓库也保留其它自定义/工程模板。正式模板本身仍包含仓库明确记录的协议例外，因此“模板名字里有正式”不等于物理验收已经完成。
+Web Camera 区域显示四路画面。
 
-## 4. 锁定配置
+当前 preview 结构：
 
-准备 session 时，系统会把模板解析成一组不可变 artifact：
+- CAM_A：主预览，stride 1
+- CAM_B/C/D：缩略图，stride 3
+- 浏览器最多同时接受 8 个 camera client
 
-- task source；
-- compiled trial table / online policy descriptor；
-- session config；
-- resolved YAML；
-- 各自 SHA-256。
+切换主画面时，Web 更新 `/rig/camera/preview_primary`，OAK pipeline 保持运行。
 
-锁定后，真正运行的是这些 artifact，不是浏览器里一份可随时变化的表单。
+## 11. Session 结束
 
-这一步要确认：
+RunSession action 结束后，Supervisor 执行：
 
-- subject 正确；
-- 参数和单位正确；
-- 模板 revision 正确；
-- override diff 符合预期；
-- 配置 SHA 已生成。
+1. controller final state
+2. recorder finalize
+3. diagnostics quality report
+4. Session result 写入
+5. post-session jobs 创建
 
-## 5. Preflight
+页面随后展示：
 
-预检的目标不是“看起来都在线”，而是判断当前 session 能不能安全开始。
+```text
+analysis
+NAS
+W&B
+Feishu
+cleanup
+```
 
-典型检查包括：
+每个 job 都有独立状态和重试。
 
-- Supervisor 与 session 状态；
-- 该 session 真正需要的设备是否健康；
-- MCU / controller link；
-- 刺激显示；
-- 相机；
-- recorder 与 session 目录；
-- 磁盘空间；
-- 时间质量；
-- 已锁定 artifact 是否仍匹配。
+## 12. 找数据
 
-红色项先处理。不要通过反复点击 Start 绕过一个稳定失败的 preflight。
+Session 数据根目录：
 
-## 6. 开始实验
+```text
+/home/jingyi/rig-os/data/sessions/<session_id>/
+```
 
-预检通过后按页面流程确认 arm / start。
+配置 resolution：
 
-Session 开始后：
+```text
+/home/jingyi/rig-os/data/compiled/web/<session_id>/
+```
 
-- 配置保持锁定；
-- Supervisor 成为 session 生命周期权威；
-- MCU 按 trial 合同执行；
-- Recorder 创建并持续写入事件日志；
-- 如配置需要相机，OAK 开始原生录制；
-- Web 持续显示状态，但不参与毫秒级执行。
+训练状态：
 
-## 7. 监看
+```text
+/home/jingyi/rig-os/data/training-policy/
+```
 
-运行中至少看四类信息：
+具体文件见 [数据 Reference](/IBLRig/reference/data/)。
 
-**行为**
-- 当前 trial；
-- correct / incorrect / no response；
-- reward；
-- 当前训练阶段或评估。
+## 13. 常用系统检查
 
-**设备**
-- MCU；
-- camera；
-- stimulus；
-- recorder；
-- time / storage。
+SSH 进入 ratRot：
 
-**画面**
-- 四路相机是否持续更新；
-- 主预览是否符合预期。
+```bash
+ssh ratRot
+```
 
-**异常**
-- fault 是否锁存；
-- 是否出现 recorder/camera 数据缺口；
-- 是否出现磁盘或网络后处理告警。
+查看控制面：
 
-## 8. 暂停、停止和 Abort
+```bash
+systemctl status ibl-rig-supervisor.service
+systemctl status ibl-rig-web.socket
+systemctl status ibl-rig-web.service
+```
 
-三者语义不同。
+查看 ROS 状态：
 
-- **Pause**：按系统允许的边界暂停，不等同紧急停机。
-- **Stop**：正常结束，等待当前执行边界后完成收尾。
-- **Abort**：异常或安全问题下中止，保留原因和 session id。
+```bash
+ros2 topic echo --once /rig/session/status
+ros2 topic echo --once /rig/runtime/graph
+ros2 topic echo --once /rig/runtime/status
+ros2 topic echo --once /rig/device_health
+```
 
-遇到机械干涉、异常给水、不可接受的运动或其它安全问题时，不应为了“保住数据”而延迟 abort。
+查看相机：
 
-## 9. 实验结束
-
-正常结束并不代表整个数据链已经结束。
-
-依次确认：
-
-1. Session 到达终态；
-2. Recorder 已 finalize；
-3. 相机 manifest 完成；
-4. analysis 状态；
-5. NAS 是否 verified；
-6. W&B / 飞书是否完成；
-7. 本地 cleanup 是否仍在等待。
-
-保留 session id。所有后处理任务都围绕它做幂等追踪。
-
-## 常见问题
-
-### 页面刷新后实验还在跑
-
-正常。Web 不是 session 权威，重新登录后读取 Supervisor 状态。
-
-### 页面是只读的
-
-控制权属于另一浏览器 session。按“身份与权限”章节处理，不要绕过 Web 直接下执行器命令。
-
-### 相机没有画面
-
-先看 camera health 和 USB 状态。当前 production 配置要求 USB3；相机恢复也受到 session/recording 状态保护。
-
-### 数据上传没完成
-
-只要 NAS 还未通过完整性验证，本地原始数据就不应被自动清理。先查对应 job 状态，不要手动删 session。
-
-### 相关源码与文档
-
-- [当前用户手册](https://github.com/QiuYi111/IBL/blob/main/docs/USER_GUIDE.md)
-- [Rig OS operations](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/docs/operations.md)
-- [Formal protocol status](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/docs/formal-pdf-protocol.md)
+```bash
+ros2 service call /rig/camera/get_inventory rig_msgs/srv/GetCameraInventory
+```
