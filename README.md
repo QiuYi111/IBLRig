@@ -2,9 +2,8 @@
 
 IBL Rig 文档站。
 
-当前内容同步 [QiuYi111/IBL](https://github.com/QiuYi111/IBL)：
-- `main`：`6c2ea40067cbfe20a0c748c7da68f80270a20016`
-- `codex/mcu-oak-recovery-chain`：`5c1a6190bf9253be0c880d5dc204b7f233c1f4bf`
+当前内容同步 [QiuYi111/IBL](https://github.com/QiuYi111/IBL) `main`：
+`453c94e375e28b929accfb34cee45e98a5202666`。
 
 ## 内容
 
