@@ -1,154 +1,300 @@
 ---
 title: "02 · 配置文件"
 weight: 30
-baseline: "IBL main @ 6c2ea40 · 2026-09-28"
-summary: "配置不是一份随手改的 YAML：模板经过解析、override、编译和哈希锁定后才成为 session 的执行输入。"
+baseline: "IBL main @ 6c2ea40"
+summary: "模板库、revision、override、resolve、Trial 编译和训练状态。"
 ---
 
-IBL Rig 的配置系统解决两个问题：
+# 配置文件
 
-1. **人要能方便地选择和修改实验参数。**
-2. **真正运行时必须知道“到底运行了哪一份配置”。**
+Rig Web 使用 YAML 模板描述实验。模板经过 resolve 后变成固定 Session artifact。
 
-因此，系统把“模板”和“执行 artifact”分开。
+## 模板库
 
-## 从模板到 Session
+模板分成两类目录：
 
 ```text
-Template YAML
-    ↓
-用户选择 subject / overrides
-    ↓
-权限策略检查 + diff
-    ↓
-Resolved configuration
-    ├─ task.json
-    ├─ compiled trial table / online-policy descriptor
-    ├─ session.json
-    └─ resolved.yaml
-    ↓
-SHA-256 锁定
-    ↓
-Supervisor / Gateway 执行
+builtin templates
+software/host/rig-os/ros2_ws/src/rig_web/templates/
+
+user templates
+/home/jingyi/rig-os/data/config/templates/
 ```
 
-每个 session 使用 UUID。解析完成后，artifact 被写入独立目录；如果同一 session 已存在，系统拒绝覆盖。
+内置模板随代码发布。用户模板由 Web 管理。
 
-## 模板的基本结构
+当前内置模板：
 
-典型模板包含：
+```text
+choice-world-formal-pretraining
+choice-world-formal-training
+choice-world-office-silent
+choice-world-pretraining-auto-reward
+choice-world-training-online
+choice-world-training-phase0-hil
+ratrot-training-choice-world-v2
+verification-choice-world-fast-three
+verification-choice-world-office-silent-no-oak
+```
 
-| 字段 | 作用 |
+## TemplateStore
+
+`TemplateStore` 提供完整版本管理：
+
+- create
+- version
+- history
+- rollback
+- archive
+- restore
+
+用户模板首次创建为 revision 1。
+
+保存新版本时：
+
+```text
+revision N
+    ↓
+保存到 .history/<template_id>/N.yaml
+    ↓
+新内容写成 revision N+1
+    ↓
+原子替换 active YAML
+```
+
+Template id 在整个 builtin + user catalog 中保持唯一。
+
+## Schema v1
+
+核心字段：
+
+```yaml
+schema_version: 1
+template_id: example
+revision: 1
+display_name: Example
+rig_id: ratrot
+operating_mode: active_shaping
+mode: online_policy
+
+task:
+  schema_version: 1
+  task_type: training_choice_world
+  plan: {}
+
+online_policy: {}
+
+session:
+  protocol: ...
+  notes: ...
+  required_devices: []
+```
+
+### operating_mode
+
+当前三种模式：
+
+| 值 | ROS enum |
+|---|---:|
+| `maintenance` | 0 |
+| `standard_compatibility` | 1 |
+| `active_shaping` | 2 |
+
+### mode
+
+| 值 | 执行方式 |
 |---|---|
-| `template_id` / `revision` | 模板身份与版本 |
-| `rig_id` | 目标 rig |
-| `operating_mode` | 运行模式 |
-| `task` | task type 与 plan |
-| `online_policy` | 需要逐 trial 决策时的策略状态 |
-| `session` | protocol、notes、required devices 等 session 元数据 |
+| `precompiled` | 整场 Trial 预编译 |
+| `online_policy` | 每个 outcome 后生成下一 Trial |
 
-Web 不把 `required_devices` 当作最终设备清单。真正需要哪些能力由编译后的 task 与 session artifact 推导，避免调用方随意声明“这场实验不需要某个实际会被用到的设备”。
+## Schema v2
 
-## 参数与物理意义
+v2 模板把 protocol 和 rig profile 分开。
 
-下面列的是当前 ChoiceWorld 路径常见参数。
+当前 protocol id：
 
-| 参数 | 物理意义 |
-|---|---|
-| `positions_deg` | 刺激初始视角位置 |
-| `contrast` / contrast set | 视觉对比度 |
-| `orientation_deg` | Gabor 方向 |
-| `spatial_frequency_cpd` | 空间频率 |
-| `sigma_deg` | Gabor 尺寸 |
-| `quiescent_base_us` | 静止窗口基准时间 |
-| `quiescence_threshold_deg` | 静止判据对应的轮动阈值描述 |
-| `response_window_us` | 允许响应的窗口 |
-| `reward` | 奖励模式、方向和持续时间/体积 |
-| `feedback_correct_us` | 正确反馈持续时间 |
-| `feedback_error_us` | 错误反馈持续时间 |
-| `iti_us` | trial 间隔 |
-| `force_profile_id` | MCU 电机/触觉 profile |
-| `required_time_quality` | session 对时间质量的最低要求 |
+```text
+ibl.training_choice_world
+```
 
-这些值最终要进入 trial 合同，或者成为编译器明确处理的 session 参数。不能把一个“看起来没被用”的字段默认理解为无害。
+当前 rig profile：
 
-## 当前正式预训练模板
+```text
+ratrot
+```
 
-当前 `main` 中的 `choice-world-formal-pretraining.yaml`：
+加载时，configuration layer 把 v2 展开成 v1 execution template，再进入相同 resolve 流程。
 
-- 左右位置：±35°；
-- contrast：1.0；
-- 侧面刺激约 10 ± 2 s；
-- 到中央后 0.5 s 请求奖励；
-- 奖励默认反转 2 s；
-- 请求奖励后约 0.5 s 隐藏；
-- 400 trial 是上限，不代替每日训练时长安排；
-- session seed 由 session 身份派生，避免每场重复相同随机序列。
+## Override
 
-仓库文档明确说明：声音/定时给水等部分是当前实现相对 PDF v4.6 的例外，不能把 2 s 奖励直接解释为某个固定 µL。
+Web policy 定义允许修改的路径。
 
-## 当前正式训练模板
+Override 使用 dotted path，例如：
 
-当前 `main` 中正式训练模板 revision 为 1，使用独立的 `ibl_pdf_v4_6` online policy。
+```text
+task.plan.response_window_us
+task.plan.feedback_error_us
+online_policy.trial_cap
+```
 
-关键点：
+Resolve 会记录每项改动：
 
-- 六阶段训练；
-- ±35°位置；
-- 自动读取同一 subject 的训练历史；
-- 首场必须明确声明没有旧历史；
-- 已经有历史时禁止把动物重新声明成“新动物”；
-- 阶段、成绩窗口、增益等状态跨 session 继承；
-- 奖励当前仍按用户定制为反转 2 s；
-- 正确反馈扩展到 2.2 s 以覆盖泵动作。
+```yaml
+override_diff:
+  task.plan.response_window_us:
+    before: 60000000
+    after: 30000000
+```
 
-当前 `main` 仍使用 `wheel_radius_mm: 31.0` 的配置路径。仓库中今天出现的 direct wheel-to-screen gain 改动位于未合并分支，不属于本站当前基线。
+## Resolve 输出
 
-## 为什么要锁定和哈希
+一次 resolve 生成：
 
-配置系统会保存：
+### `task.json`
 
-- 模板源文件哈希；
-- task source 哈希；
-- compiled table 哈希；
-- session config 哈希；
-- resolved YAML 哈希；
-- override diff。
+最终 task 定义。
 
-这样实验结束后可以回答：
+### `<sha>.trial-table.json`
 
-> 这只动物、这一场、到底执行了哪一个 trial 逻辑？
+MCU 可执行的编译 artifact。
 
-而不是只能回答“当时应该是那个 YAML”。
+Online policy 模式下，该 artifact 同时携带：
 
-## 自动训练历史
+- session identity
+- subject identity
+- policy build
+- plan template
+- seed
+- epoch
+- trial cap
+- training info
+- state file name
 
-正式 PDF 路径支持 `auto_history`。
+### `session.json`
 
-系统不会把“历史目录打不开”解释成“这只动物没有历史”。目录不可读、历史不完整、快照校验失败、上一场尚未结束都会 fail closed。
+Session metadata：
 
-这是训练状态的一部分，不是 UI 便利功能。
+- rig id
+- operating mode
+- protocol
+- operator
+- subject id
+- template id
+- template revision
+- notes
+- required devices
 
-## 修改配置的原则
+### `resolved.yaml`
 
-推荐：
+完整锁定结果：
 
-- 从模板库复制后修改；
-- 只改 Web 明确允许的字段；
-- 看 diff；
-- 每次 session 生成新的 resolved artifact；
-- 模板含义改变时升级 revision。
+- template
+- source SHA
+- overrides
+- override diff
+- artifact SHA
+- required devices
 
-不要：
+### `resolution.json`
 
-- session 开始后直接改生成文件；
-- 手工修改哈希；
-- 用旧 resolved artifact 假装新 session；
-- 因为某个设备“不想用”就手写 required device 清单绕过编译结果。
+Web / coordinator 使用的紧凑索引。
 
-### 相关源码与文档
+## Required devices
 
-- [Web configuration implementation](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/ros2_ws/src/rig_web/rig_web/configuration.py)
-- [Formal pretraining template](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/ros2_ws/src/rig_web/templates/choice-world-formal-pretraining.yaml)
-- [Formal training template](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/ros2_ws/src/rig_web/templates/choice-world-formal-training.yaml)
-- [Formal protocol status](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/docs/formal-pdf-protocol.md)
+Required device 集合由编译结果计算。
+
+`required_session_devices()` 读取 Trial 和 Session config，得到实际 capability 需求。
+
+因此 Session 的设备需求与执行内容保持一致。
+
+## 正式预训练
+
+当前正式预训练：
+
+```yaml
+task_type: habituation_choice_world
+positions_deg: [-35, 35]
+contrast_set: [1.0]
+trial_count: 400
+lateral_mean_s: 10
+lateral_sd_s: 2
+center_pre_reward_us: 500000
+reward:
+  direction: reverse
+  mode: duration
+  duration_ms: 2000
+reward_hold_us: 40000
+center_post_reward_us: 460000
+stimulus_ack_timeout_us: 3000000
+required_time_quality: freerun
+```
+
+`seed_source: session` 让每个 Session 从 Session id 派生独立随机序列。
+
+## 正式训练
+
+当前正式训练：
+
+```yaml
+task_type: training_choice_world
+protocol: ibl_pdf_v4_6
+positions_deg: [-35, 35]
+stimulus_reverse: true
+wheel_radius_mm: 31
+quiescence_threshold_deg: 2
+quiescent_base_us: 200000
+response_window_us: 60000000
+feedback_correct_us: 2200000
+feedback_error_us: 2000000
+feedback_nogo_us: 2000000
+iti_us: 500000
+stimulus_ack_timeout_us: 3000000
+sound_enabled: true
+force_profile_id: 27
+required_time_quality: freerun
+```
+
+Online policy：
+
+```yaml
+auto_history: true
+trial_cap: 2000
+```
+
+## Training history
+
+训练状态存放在：
+
+```text
+/home/jingyi/rig-os/data/training-policy/
+```
+
+Web 按 subject id 找最近完成的 policy snapshot，并恢复：
+
+- training phase
+- adaptive reward
+- adaptive gain
+- performance history
+- phase trial counts
+
+每个 snapshot 带 state digest 和 decision digest。
+
+## Trial 随机性
+
+Online Trial 的随机 seed 由：
+
+```text
+epoch
+trial_id
+policy_state_sha256
+```
+
+共同派生。
+
+相同 policy state 与相同 Trial id 会得到相同编译结果。
+
+## 参数 Reference
+
+完整参数、默认值、单位和所在配置见：
+
+[实验参数 Reference](/IBLRig/reference/configuration/)。
