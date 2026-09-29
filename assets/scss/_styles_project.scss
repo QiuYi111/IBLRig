@@ -1,0 +1,26 @@
+// Keep project styling small. Docsy owns the main visual system.
+
+.docs-baseline,
+.docs-summary {
+  color: var(--bs-secondary-color);
+  font-size: .875rem;
+}
+
+.docs-baseline {
+  margin-bottom: .25rem;
+}
+
+.docs-summary {
+  margin-bottom: 1.5rem;
+}
+
+.system-flow {
+  overflow-x: auto;
+}
+
+.status-note {
+  padding: .9rem 1rem;
+  margin: 1rem 0 1.5rem;
+  border-left: 4px solid var(--bs-warning);
+  background: var(--bs-tertiary-bg);
+}
