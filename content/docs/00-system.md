@@ -110,12 +110,12 @@ RoboMaster C Board 使用 STM32F407。
 
 ## 行为声音
 
-系统通过主机音频输出生成两种声音：
+行为声音由 C Board 蜂鸣器产生：
 
-- Go tone：5 kHz，100 ms
-- Error noise：500 ms 白噪声
+- Go tone：4 kHz，100 ms
+- Error sound：2 kHz 与 4 kHz 每 50 ms 交替一次，总时长 500 ms
 
-音频采样率为 48 kHz。
+声音和 Trial 使用同一块 STM32 控制器计时。
 
 ## 四路相机
 
