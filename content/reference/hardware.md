@@ -41,15 +41,24 @@ AC
 |---|---|
 | SoC | Broadcom BCM2712 |
 | CPU | 4 × Cortex-A76 @ 2.4 GHz |
-| RAM | 8 GB LPDDR4X |
-| USB 3 | 2 × 5 Gbps |
+| RAM | 8 GB LPDDR4X-4267 |
+| USB 3 | 2 × 5 Gbps，可同时工作 |
+| USB 2 | 2 |
 | Ethernet | 1 Gbps |
 | PCIe | PCIe 2.0 ×1 |
-| HDMI | 双 4K60 输出能力 |
+| HDMI | 双 4K60 |
+| HEVC | 4K60 hardware decode |
+| Wi-Fi | 802.11ac dual-band |
+| Bluetooth | 5.0 / BLE |
+| 推荐供电 | USB-C 5 V / 5 A |
 | 当前系统 | Ubuntu 24.04 |
 | ROS | ROS 2 Jazzy |
 | 数据盘 | SK hynix BC711 256 GB NVMe |
 | 系统启动盘 | microSD |
+
+用途：运行网页控制台、ROS 2、视觉刺激、四路视频落盘、实验分析和自动归档。
+
+厂商资料：[Raspberry Pi 5](https://www.raspberrypi.com/products/raspberry-pi-5/)
 
 ## RoboMaster Development Board Type C
 
@@ -99,6 +108,7 @@ AC
 | 输出轴 | 6 mm D 轴 |
 | C610 持续电流 | 10 A |
 | C610 控制 | CAN |
+| 工作温度 | 0–55 °C |
 | C610 尺寸 | 50 × 22 × 7.3 mm |
 | C610 重量 | 17 g |
 | 控制频率 | 500 Hz |
@@ -118,10 +128,11 @@ AC
 
 ## 奖励泵
 
+### 蠕动泵
+
 | 项目 | 参数 |
 |---|---:|
 | 类型 | 四线步进蠕动泵 |
-| 驱动 | DRV8834 |
 | 驱动电压 | 5 V |
 | STEP | PE9 / TIM1_CH1 |
 | DIR | PE11 |
@@ -133,12 +144,31 @@ AC
 | 当前流量 | 约 0.275 mL/min |
 | 队列容量 | 200 µL |
 
+用途：Trial 奖励给水和网页“蠕动泵排气 · 反转 1 分钟”。
+
+### DRV8834
+
+| 项目 | TI 规格 |
+|---|---:|
+| 电源范围 | 2.5–10.8 V |
+| 当前使用 | 5 V |
+| 连续输出电流 | 1.5 A / H-bridge |
+| 峰值输出电流 | 2.2 A / H-bridge |
+| 控制方式 | STEP/DIR 或 PH/EN |
+| 最大微步 | 1/32 |
+| H-bridge | 2 |
+| 电流调节 | PWM current regulation |
+| 工作温度 | -40–85 °C |
+
+厂商资料：[TI DRV8834](https://www.ti.com/product/DRV8834)
+
 ## OAK-FFC-4P
 
 | 项目 | 参数 |
 |---|---|
 | 平台 | Luxonis RVC2 |
 | 主机接口 | USB 3 |
+| OAK 主机接口能力 | USB 2/3，最高 10 Gbps |
 | 当前链路 | 5 Gbps SuperSpeed |
 | 供电 | 外部 5 V |
 | Camera sockets | CAM_A/B/C/D |
@@ -169,6 +199,10 @@ Luxonis 官方 RVC2 平台典型值：
 | AI subsystem | +1 W |
 | Stereo depth | +0.5 W |
 
+满负载环境温度范围：-20–50 °C。
+
+厂商资料：[Luxonis OAK-FFC-4P](https://docs.luxonis.com/hardware/products/OAK-FFC%204P)
+
 ## 刺激显示
 
 | 项目 | 参数 |
@@ -190,14 +224,60 @@ Luxonis 官方 RVC2 平台典型值：
 | Go tone | 4 kHz / 100 ms |
 | Error sound | 2 kHz ↔ 4 kHz，每段 50 ms，共 500 ms |
 
-## PPS
+## GPSDO 与同步
 
-| 项目 | 参数 |
+GPSDO 提供 10 MHz 和 PPS。
+
+| 信号 | 当前接口 |
 |---|---|
-| 来源 | GPSDO PPS |
-| C Board pin | J16 C7 |
-| MCU | PI7 / TIM8_CH3 |
-| 状态超时 | 2.5 s |
+| 10 MHz | SMA 输出，约 3 V 正弦 |
+| PPS | SMA 输出，3.3 V / 1 Hz |
+| PPS 输入 | C Board J16 C7 |
+| MCU 捕获 | PI7 / TIM8_CH3 |
+| PPS 状态超时 | 2.5 s |
+
+### TLV3501
+
+10 MHz 整形使用 TLV3501 高速比较器。
+
+| 项目 | TI 规格 |
+|---|---:|
+| 通道 | 1 |
+| 传播延迟 | 4.5 ns |
+| 供电 | 2.7–5.5 V |
+| 输出 | Push-pull CMOS |
+| 静态电流 | 3.2 mA typ. |
+| 工作温度 | -40–125 °C |
+
+用途：把 GPSDO 的 10 MHz 正弦信号整形成 3.3 V 数字时钟。
+
+厂商资料：[TI TLV3501](https://www.ti.com/product/TLV3501)
+
+## 辅助电源与照明
+
+### 辅助 DC-DC
+
+输入 24 V，提供：
+
+- 5 V：OAK-FFC-4P
+- 5 V：DRV8834 与奖励泵
+- 12 V：红外照明 MOSFET
+- 3.3 V：低压逻辑模块
+
+### MOSFET 照明开关
+
+MOSFET 模块接收 C Board 3.3 V 控制信号，开关 12 V 红外灯。
+
+用途：训练过程中为四路相机提供稳定红外照明。
+
+### PDU
+
+整机 PDU 同时提供：
+
+- AC：Pi 5 电源、GPSDO 等
+- USB-C PD：刺激显示器、监看显示器
+
+用途：集中完成整机上电和双显示器供电。
 
 ## 相机/照明模块 R2
 
