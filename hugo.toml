@@ -7,7 +7,7 @@ pluralizeListTitles = false
 
 [params]
   title = "IBL Rig Documentation"
-  description = "IBL 行为训练装置与软件系统文档"
+  description = "IBL 行为训练系统文档"
   github_repo = "https://github.com/QiuYi111/IBLRig"
   github_branch = "master"
   offlineSearch = true
@@ -60,11 +60,16 @@ pluralizeListTitles = false
   weight = 10
 
 [[menus.main]]
+  name = "Reference"
+  pageRef = "/reference"
+  weight = 20
+
+[[menus.main]]
   name = "IBL 源码"
   url = "https://github.com/QiuYi111/IBL"
-  weight = 20
+  weight = 30
 
 [[menus.main]]
   name = "文档仓库"
   url = "https://github.com/QiuYi111/IBLRig"
-  weight = 30
+  weight = 40
