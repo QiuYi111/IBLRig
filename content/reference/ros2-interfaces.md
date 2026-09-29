@@ -184,6 +184,18 @@ M2006/C610 状态。
 
 刺激屏显示结果和 page-flip 时间。
 
+显示详情包含：
+
+- Trial 编号
+- 起始像素位置
+- 当前像素位置
+- 当前转轮-屏幕增益 `gain_px_per_deg`
+- 响应阈值
+- 转轮当前位置
+- Trial 转轮参考位置
+- 屏幕中心残差
+- 闭环状态
+
 ### `/rig/sound/presentation`
 
 类型：`rig_msgs/msg/SoundPresentation`
