@@ -1,162 +1,382 @@
 ---
 title: "05 · 硬件介绍"
 weight: 60
-baseline: "IBL main @ 6c2ea40 · 2026-09-28"
-summary: "从 C Board、M2006、蠕动泵、OAK 到机械 R5：介绍当前工程版本和已知验证边界。"
+summary: "主机、控制器、电机、奖励泵、相机、显示、同步、照明、电源和机械结构。"
 ---
 
-IBL Rig 的硬件不是一张静态 BOM。仓库区分：
+# 硬件介绍
 
-- engineering current；
-- integration / manufacturing candidate；
-- manufacturing candidate；
-- production release。
+IBL Rig 的硬件围绕一件事组织：让小鼠在转轮上完成 ChoiceWorld 训练，同时得到稳定的视觉刺激、力反馈、奖励和四路视频记录。
 
-文件名里写着 `final` 或时间更晚，都不能自动成为“当前版本”。当前身份由 `hardware/configuration/current-hardware.json` 注册。
+## 整机
 
-## Raspberry Pi 5 Host
+当前整机机械版本为 R5。
 
-当前 ratRot Host 基线是 Raspberry Pi 5：
+整机尺寸约：
 
-- 8 GiB RAM；
-- Ubuntu 24.04 arm64；
-- ROS 2 Jazzy；
-- SD 启动；
-- NVMe 作为主要 `/data` 数据盘；
-- 相机、session、日志、缓存和 swap 放到 NVMe 路径。
+```text
+300 × 300 × 312.7 mm
+```
 
-Pi 负责 orchestration，不负责 500 Hz 电机控制闭环。
+R5 包含：
 
-## RoboMaster C Board / STM32F407
+- V3-ENG P4 主机构
+- 两个 CNC V4 PadHolder
+- MouseCover
+- 四个紧凑相机/照明模块 R2
+- 转轮与 M2006
+- 刺激显示器
+- 四路相机
+- 奖励液路
+- 控制与供电模块
 
-C Board 是实时控制核心。
+四个相机/照明模块安装在整机四周，模块支持约 ±30° 俯仰调整。
 
-职责包括：
+## Raspberry Pi 5
 
-- Trial FSM；
-- wheel/input capture；
-- M2006/C610；
-- pump；
-- TTL；
-- safety lease；
-- fault latch；
-- controller link 的应用侧。
+Raspberry Pi 5 是实验主机。
 
-当前代码的 production controller link 合同使用 ST-Link/SWD 非停核 SRAM data plane。维护、刷机和运行链路必须遵守单 owner 规则，避免 Gateway、watchdog 和调试工具同时占用 probe。
+当前设备：
 
-## 转轮、M2006 与 C610
+| 项目 | 参数 |
+|---|---|
+| CPU | Broadcom BCM2712 |
+| CPU 核心 | 4 × Arm Cortex-A76 |
+| 主频 | 2.4 GHz |
+| 内存 | 8 GB LPDDR4X |
+| USB 3 | 2 × 5 Gbps |
+| 网口 | Gigabit Ethernet |
+| PCIe | PCIe 2.0 ×1 |
+| 系统 | Ubuntu 24.04 |
+| ROS | ROS 2 Jazzy |
 
-M2006 + C610 用于转轮与触觉/力反馈。
+官方规格还提供双 4K60 HDMI 输出和硬件 HEVC 解码能力。
 
-固件支持多种控制模式和 profile，实时闭环留在 STM32 本地。
+### 在 IBL Rig 中怎么用
 
-维护 TUI 有独立安全限制：
+Pi 5 负责：
 
-- 默认 disarmed；
-- 需要显式 arm；
-- 维护 heartbeat；
-- heartbeat / SSH / Agent 丢失后撤防；
-- current limit 有 Host 与 MCU 双重上限。
+- 网页控制台
+- ROS 2 实验服务
+- H.265 视频落盘
+- 视觉刺激
+- 行为声音
+- 数据分析
+- NAS 上传
+- W&B 和飞书同步
 
-动物训练所需的力学标定仍是独立工作，软件存在 profile 不代表已经完成动物级力反馈标定。
+系统从 microSD 启动，实验数据写入 256 GB SK hynix BC711 NVMe。
 
-## 蠕动泵
+项目、录像、日志和缓存均放在 NVMe。
 
-奖励泵由 MCU 执行。
+官方规格：
+[Raspberry Pi 5](https://www.raspberrypi.com/products/raspberry-pi-5/)
 
-系统区分：
+## RoboMaster 开发板 C 型
 
-- 按体积的奖励合同；
-- 当前正式模板中按持续时间定制的反转泵动作。
+RoboMaster C Board 是整套装置的实时控制器。
 
-正式训练模板当前默认反转 2 s，但仓库明确写明：
+核心 MCU 为 STM32F407 系列，运行 FreeRTOS。
 
-> 2 s 不是自动等价于 3 µL。
+开发板官方规格：
 
-泵体积、重复性、温升和真实液路仍需要物理验收。
+| 项目 | 参数 |
+|---|---|
+| 输入电压 | 8–28 V |
+| 当前供电 | 24 V |
+| 工作温度 | 0–55 °C |
+| CAN | CAN1 ×2，CAN2 ×2 |
+| UART | 2 |
+| PWM | 7 |
+| USB | 1 |
+| I²C | 1 |
+| SPI | 1 |
+| IMU + 电子罗盘 | 1 |
+| 尺寸 | 60 × 41 × 16 mm |
+| 重量 | 38 g |
+
+当前固件以 168 MHz STM32F407 为控制核心。
+
+### 在 IBL Rig 中怎么用
+
+C Board 负责：
+
+- 读取转轮
+- 500 Hz 电机控制
+- Trial 状态执行
+- 奖励泵控制
+- CAN 电机通信
+- PPS 捕获
+- 行为同步输出
+- 硬件安全停止
+
+Pi 5 通过 ST-Link/SWD 与 C Board 保持运行时通信。
+
+官方规格：
+[RoboMaster Development Board Type C](https://www.robomaster.com/en-US/products/components/general/development-board-type-c)
+
+## M2006 + C610
+
+转轮使用 RoboMaster M2006 P36 减速电机和 C610 电调。
+
+官方参数：
+
+| 项目 | 参数 |
+|---|---:|
+| 系统电压 | 24 V |
+| 空载转速 | 500 rpm |
+| 持续最大扭矩 | 1 N·m |
+| 1 N·m 下转速 | 416 rpm |
+| 减速比 | 36:1 |
+| 电机重量 | 90 g |
+| 电机外径 | 24.4 mm |
+| 电机长度 | 64.8 mm |
+| 输出轴直径 | 6 mm |
+| C610 持续电流 | 10 A |
+| C610 通信 | CAN |
+| C610 尺寸 | 50 × 22 × 7.3 mm |
+| C610 重量 | 17 g |
+
+### 在 IBL Rig 中怎么用
+
+M2006 连接转轮，为转轮提供：
+
+- 位置与速度反馈
+- 阻尼
+- 惯性
+- 弹簧感
+- 棘轮感
+- 透明模式
+- 自适应透明模式
+
+正式训练当前使用 profile 27。
+
+电机控制环在 C Board 上以 500 Hz 运行。
+
+官方规格：
+[RoboMaster M2006 Power System](https://www.robomaster.com/en-US/products/components/general/M2006)
+
+## 奖励蠕动泵
+
+奖励系统使用四线步进蠕动泵和 DRV8834 步进驱动器。
+
+当前驱动参数：
+
+| 项目 | 参数 |
+|---|---:|
+| 驱动电压 | 5 V |
+| STEP 频率 | 12,000 pulse/s |
+| 微步 | 1/32 |
+| STEP | C Board PE9 |
+| DIR | C Board PE11 |
+| 单次队列上限 | 200 µL |
+
+当前校准：
+
+```text
+14,399,993 pulses → 5.5 mL
+0.381944630 nL / pulse
+2618.180545 pulses / µL
+```
+
+在 12 kHz 下，对应约：
+
+```text
+4.58 µL/s
+0.275 mL/min
+```
+
+### 在 IBL Rig 中怎么用
+
+泵承担两种用途：
+
+**训练奖励**
+
+正式训练当前设置为反转 2 s。
+
+**管路排气**
+
+网页提供“蠕动泵排气 · 反转 1 分钟”，用于装液和清除气泡。
+
+C Board 直接产生 STEP/DIR 信号，因此奖励动作和 Trial 时间保持在同一硬件时序中。
 
 ## OAK-FFC-4P
 
-当前相机系统：
+视频系统使用 Luxonis OAK-FFC-4P。
 
-- OAK-FFC-4P；
-- 四个 camera socket；
-- 1280×800；
-- USB3；
-- 外部供电；
-- 原生 H.265 录制；
-- 并行 MJPEG Web preview。
+OAK-FFC-4P 基于 RVC2，官方支持 USB 2/3 连接。RVC2 提供 H.264、H.265 和 MJPEG 硬件编码。
 
-2026-09-21 的第一次 Pi 5 组合长测因为 USB over-current 中断。把显示器移出 Pi USB 供电路径、OAK 保持外部 5 V 后，15 fps 的 60 分钟测试通过。
+OAK-FFC-4P 官方典型功耗：
 
-因此，供电拓扑本身是相机系统的一部分，不只是“能亮就行”。
+- 相机 streaming：2.5–3 W
+- 视频编码：最高约 0.5 W
+- RVC2 满负载环境温度范围：-20–50 °C
 
-## 显示与视觉刺激
+### 四个传感器
 
-刺激显示使用独立 direct-KMS renderer。
+| 位置 | Sensor | 类型 | 快门 | 分辨率 |
+|---|---|---|---|---|
+| CAM_A | OV9782 | 彩色 | Global shutter | 1280 × 800 |
+| CAM_B | OV9282 | 黑白 | Global shutter | 1280 × 800 |
+| CAM_C | OV9282 | 黑白 | Global shutter | 1280 × 800 |
+| CAM_D | OV9282 | 黑白 | Global shutter | 1280 × 800 |
 
-特点：
+OV9782 和 OV9282 在 RVC2 上的 1280 × 800 原生模式最高为 129 fps。
 
-- task node 不直接画图；
-- 支持 PRELOAD / SHOW / CLOSED_LOOP / FREEZE / HIDE；
-- 每次语义命令有 page-flip acknowledgement；
-- photodiode patch 用于把物理显示时刻带回 MCU 捕获。
+### 当前使用参数
 
-软件 page-flip 时间只用于诊断；真正的视觉 onset/off 应以物理光电边沿为准。
+| 项目 | 当前值 |
+|---|---:|
+| 分辨率 | 1280 × 800 |
+| 帧率 | 30 fps |
+| 录像编码 | H.265 |
+| 码率 | 12 Mbps / 路 |
+| 浏览器预览 | MJPEG |
+| 主预览 | CAM_A |
+| 数据连接 | USB 3，5 Gbps |
+| 供电 | 外部 5 V |
 
-当前仓库仍把显示几何、眼距和 photodiode timing 的完整标定列为未完成项。
+### 在 IBL Rig 中怎么用
 
-## 时钟与同步
+OAK 在设备端完成视频编码。
 
-系统设计里 timing station 是 global time authority。
+Pi 5 接收编码后的视频流并直接写入 NVMe，同时保存：
 
-当前 PPS 可以作为边沿/频率参考，但如果没有机器可读的 UTC second number，就不能把 Host 接收时间凑成“UTC 已锁定”。
+- 帧序号
+- 相机时间戳
+- 曝光
+- 增益
+- 文件位置
 
-时间质量必须显式表示。
+浏览器显示四路实时预览。
 
-## 机械结构
+官方规格：
 
-当前硬件注册表记录：
+- [OAK-FFC-4P](https://docs.luxonis.com/hardware/products/OAK-FFC%204P)
+- [OV9782](https://docs.luxonis.com/hardware/sensors/OV9782)
+- [OV9282](https://docs.luxonis.com/hardware/sensors/OV9282)
 
-| 部件 | 当前版本 | 状态 |
-|---|---|---|
-| Full rig | R5 | engineering-candidate |
-| Core mechanism | V3-ENG P4 | engineering-candidate |
-| Pad holder | CNC V4 | engineering-current |
-| Mouse cover | true B-Rep rebuild | engineering-current |
-| Compact camera/lamp | R2 | integration-candidate |
-| Adjustable camera/lamp | Rev B | manufacturing-candidate |
+## 刺激显示器
 
-制造包仍是 candidate，`production_release` 为空。
+刺激显示器连接 Pi 5 HDMI。
 
-## 辅助模块
+当前参数：
 
-整个 rig 还包括：
+| 项目 | 当前值 |
+|---|---:|
+| 分辨率 | 1920 × 1080 |
+| 目标刷新率 | 60 Hz |
+| 像素密度换算 | 20 px/° |
+| 背景亮度 | 0.5 |
+| 光电标记尺寸 | 80 px |
+| HDMI 输出 | HDMI-A-2 |
 
-- IR illumination；
-- display / photodiode；
-- C-board sound；
-- PPS / timing path；
-- 电源分配；
-- NAS / 网络基础设施。
+### 在 IBL Rig 中怎么用
 
-这些模块不一定都在一个 ROS 2 节点里，但都会影响一场实验的可运行状态。
+显示器呈现 Gabor 刺激。
 
-## 当前最重要的硬件边界
+训练中支持：
 
-已经有的软件/HIL结果不能代替这些物理量：
+- 预加载
+- 显示
+- 转轮闭环移动
+- 固定
+- 居中
+- 隐藏
 
-- 真实屏幕几何；
-- photodiode 时序；
-- pump volume/repeatability；
-- 动物所需的 wheel force / haptic calibration；
-- 当前 30 fps H.265 配置的长时间整机验证；
-- 完整 PPS/UTC 映射；
-- 制造与供应商放行。
+转轮和屏幕使用同一 Trial 的响应基准，使视觉移动和行为判定保持一致。
 
-### 相关源码与文档
+## 行为声音
 
-- [Current hardware registry](https://github.com/QiuYi111/IBL/blob/main/hardware/configuration/current-hardware.json)
-- [M2006 haptic platform](https://github.com/QiuYi111/IBL/tree/main/software/embedded/m2006-haptic-platform)
-- [Camera integration](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/docs/camera-integration.md)
-- [Pi 5 camera soak](https://github.com/QiuYi111/IBL/blob/main/software/host/rig-os/docs/pi5-camera-soak-2026-09-21.md)
+行为声音从 Pi 5 音频设备输出。
+
+当前参数：
+
+| 项目 | 当前值 |
+|---|---:|
+| 采样率 | 48 kHz |
+| Go tone | 5 kHz / 100 ms |
+| Go tone amplitude | 0.1 |
+| Error noise | 500 ms |
+| Error noise amplitude | 0.2 |
+| Fade | 10 ms |
+
+## 时间同步
+
+C Board 接收 GPSDO PPS。
+
+当前输入：
+
+```text
+J16 C7 → PI7 / TIM8_CH3
+```
+
+主机持续读取 PPS 状态，并把时间质量显示到实验状态中。
+
+## 红外照明
+
+红外灯使用 12 V 电源，通过 MOSFET 模块由 C Board 控制。
+
+供电链：
+
+```text
+24 V
+ ↓
+辅助电源模块
+ ↓
+12 V
+ ↓
+MOSFET
+ ↓
+IR lamp
+```
+
+相机与照明模块安装在同一可调结构上，便于同时调整视野和照明方向。
+
+## 电源系统
+
+整机使用分域供电。
+
+```text
+AC
+├── Pi 5 官方 USB-C 电源
+├── 刺激显示器
+├── 监看显示器
+├── GPSDO
+└── 24 V 电源
+      ├── C Board + C610 + M2006
+      └── 辅助电源
+            ├── 5 V → OAK
+            ├── 5 V → DRV8834 / pump
+            └── 12 V → IR lamp
+```
+
+OAK 使用独立 5 V 供电，USB 3 负责数据连接。
+
+## 主机构
+
+当前主机构为 V3-ENG P4。
+
+主要结构件采用 6061-T651 铝合金设计。
+
+当前装配包含 9 类制造件和 28 个紧固件/螺套位置。
+
+整机的两侧 PadHolder 使用同一个 CNC V4 几何，左右位置通过平移安装。
+
+## 相机/照明模块 R2
+
+R5 使用四个 compact R2 模块。
+
+模块集成：
+
+- OAK camera
+- lamp
+- 导轨安装
+- 球铰
+- 俯仰锁紧
+
+模块体积约 5380 mm³，俯仰调节范围约 ±30°。
+
+## 硬件速查
+
+详细参数、接口和接线见 [硬件参数 Reference](/IBLRig/reference/hardware/)。
