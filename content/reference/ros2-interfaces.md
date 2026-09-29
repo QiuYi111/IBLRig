@@ -302,6 +302,36 @@ ros2 service call /rig/camera/get_inventory   rig_msgs/srv/GetCameraInventory "{
 - failures
 - report JSON
 
+### `/rig/control_session`
+
+类型：`rig_msgs/srv/ControlSession`
+
+控制正在运行的实验。
+
+请求字段：
+
+- `session_id`
+- `operation`
+- `operator_id`
+- `reason`
+
+操作值：
+
+| 值 | 操作 |
+|---:|---|
+| 0 | PAUSE_AFTER_TRIAL |
+| 1 | RESUME |
+| 2 | STOP_AFTER_TRIAL |
+| 3 | ABORT |
+
+`ABORT` 会立即结束当前训练流程，当前 Trial 记录为 aborted，Session 以 `operator_abort` 原因完成收尾。
+
+返回：
+
+- `accepted`
+- `state`
+- `detail`
+
 ### `/rig/reset_fault`
 
 类型：`rig_msgs/srv/ResetFault`
