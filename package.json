@@ -1,0 +1,12 @@
+{
+  "name": "ibl-rig-docs",
+  "private": true,
+  "scripts": {
+    "hugo": "hugo",
+    "build": "hugo --minify",
+    "start": "hugo server -D"
+  },
+  "devDependencies": {
+    "sass-embedded": "1.102.0"
+  }
+}
